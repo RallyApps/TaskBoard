@@ -164,6 +164,12 @@ function initTaskboard() {
                 timeClass.push('de-emphasis');
             }
 
+            if (value.ScheduleState == 'Completed') {
+                divClass.push('rally-workprod-completed');
+                divClass.push('de-emphasis');
+            } else if (value.TaskRemainingTotal == '' || value.TaskRemainingTotal == 0) {
+                timeClass.push('de-emphasis');
+            }
             html.push('<div class="' + divClass.join(' ') + '" id="' + divId + '">');
 
             state = new RALLY.toolkit.renderer.StateRenderer({
@@ -240,6 +246,10 @@ function initTaskboard() {
 
             if (item.WorkProduct && item.WorkProduct.ScheduleState == 'Accepted') {
                 taskClass.push('rally-task-accepted');
+                taskClass.push('de-emphasis');
+            }			
+            if (item.WorkProduct && item.WorkProduct.ScheduleState == 'Completed') {
+                taskClass.push('rally-task-completed');
                 taskClass.push('de-emphasis');
             }
 
@@ -318,6 +328,7 @@ function initTaskboard() {
 
     RALLY.toolkit.Controller.prototype = {
         acceptedCookieKey:  'taskboard-hide-accepted',
+        completedCookieKey: 'taskboard-hide-completed',
         ownerCookieKey:     'taskboard-filter-by-owner',
         iterationCookieKey: 'taskboard-filter-by-iteration',
         projectOidCookieKey:'taskboard-current-project',
@@ -367,12 +378,14 @@ function initTaskboard() {
                     var i;
 
                     that.hideAcceptedControl = Dom.get('hide_accepted_control');
+                    that.hideCompletedControl = Dom.get('hide_completed_control');
                     that.iterationSelect = Dom.get('change_iteration_control');
 
                     // clear out the grid container and any state-dependant vars
                     YAHOO.util.Dom.get('taskboard').innerHTML = '';
                     that.users = [];
                     YAHOO.util.Event.removeListener(that.hideAcceptedControl, 'click');
+                    YAHOO.util.Event.removeListener(that.hideCompletedControl, 'click');
                     YAHOO.util.Event.removeListener(that.iterationSelect, 'change');
 
 
@@ -428,6 +441,13 @@ function initTaskboard() {
                     Event.removeListener(that.hideAcceptedControl, 'click');
                     Event.addListener(that.hideAcceptedControl, 'click', that.toggleAccepted, that, true);
 
+                    // should we hide completed work?
+                    if (RALLY.toolkit.Cookie.get(that.completedCookieKey) == 'true' || RALLY.toolkit.Cookie.get(that.completedCookieKey) == null) {
+                        that.hideCompletedControl.checked = true;
+                        that.toggleCompleted();
+                    }
+                    Event.removeListener(that.hideCompletedControl, 'click');
+                    Event.addListener(that.hideCompletedControl, 'click', that.toggleCompleted, that, true);
                     // add users into the select that were found during the rendering
                     that.refreshUserSelect();
 
@@ -499,7 +519,33 @@ function initTaskboard() {
                 }
             }
         },
+		
+        toggleCompleted: function() {
+            var i, len, row,
+                    hideCompletedControl = this.hideCompletedControl || Dom.get('hide_completed_control'),
+                    userSelect = this.userSelect || Dom.get('filter_user_control'),
+                    hideCompleted = hideCompletedControl.checked,
+                    workProds = Dom.getElementsByClassName('rally-workprod-completed');
+            RALLY.toolkit.Cookie.add(this.completedCookieKey, hideCompleted);
 
+            for (i = 0,len = workProds.length; i < len; i++) {
+                row = this.getParentRow(workProds[i]);
+
+                if (hideCompleted) {
+                    Dom.addClass(row, 'completed');
+                } else {
+                    Dom.removeClass(row, 'completed');
+                }
+            }
+
+            if (hideCompleted && this.numItemsVisible() == 0) {
+                if (userSelect.selectedIndex >= 0 && userSelect.options[userSelect.selectedIndex].value == this.allOwnersLabel) {
+                    RALLY.toolkit.showWarning('The selected iteration contains only completed stories');
+                } else {
+                    RALLY.toolkit.showWarning('The selected owner has only completed stories and/or tasks');
+                }
+            }
+        },
         refreshUserSelect: function() {
             this.userSelect = this.userSelect || Dom.get('filter_user_control');
 
@@ -704,7 +750,10 @@ function initTaskboard() {
 
             items = this.view.findItems(comparator);
             for (i = 0,len = items.length; i < len; i++) {
-                if (!(Dom.hasClass(items[i], 'hidden') || Dom.hasClass(this.getParentRow(items[i]), 'accepted') || Dom.hasClass(this.getParentRow(items[i]), 'hidden'))) {
+                if (!(Dom.hasClass(items[i], 'hidden') 
+						|| Dom.hasClass(this.getParentRow(items[i]), 'accepted') 
+						|| Dom.hasClass(this.getParentRow(items[i]), 'completed') 
+						|| Dom.hasClass(this.getParentRow(items[i]), 'hidden'))) {
                     num++;
                 }
             }
@@ -712,7 +761,7 @@ function initTaskboard() {
         },
 
         filterByOwner: function() {
-            var i, len, that = this, shown = 0, shownAccepted = 0, itemMap = {}, rows = [], items, item,
+            var i, len, that = this, shown = 0, shownAccepted = 0, shownCompleted = 0, itemMap = {}, rows = [], items, item,
                     sel = this.userSelect || Dom.get('filter_user_control'),
                     selected = sel.options[sel.selectedIndex];
 
@@ -762,6 +811,8 @@ function initTaskboard() {
                     } else {
                         if (this.hideAcceptedControl.checked && Dom.hasClass(item, 'rally-task-accepted')) {
                             shownAccepted++;
+                        } else if (this.hideCompletedControl.checked && Dom.hasClass(item, 'rally-task-completed')){
+							shownCompleted++;
                         } else {
                             shown++;
                         }
@@ -772,7 +823,9 @@ function initTaskboard() {
                     if (isParentVisible(item)) {
                         if (this.hideAcceptedControl.checked && Dom.hasClass(item, 'hidden')) {
                             shownAccepted++;
-                        } else {
+                        } else if (this.hideCompletedControl.checked && Dom.hasClass(item, 'hidden')) {
+                            shownCompleted++;
+						} else {
                             shown++;
                         }
                         Dom.removeClass(item, 'hidden');
@@ -786,7 +839,14 @@ function initTaskboard() {
                 RALLY.toolkit.showWarning('The selected owner has only accepted stories and/or tasks');
             }
             if ((shown + shownAccepted) == 0) {
-                RALLY.toolkit.showWarning('The selected owner does not own any stories or tasks');
+                RALLY.toolkit.showWarning('The selected owner does not own any accepted stories or tasks');
+            }
+
+            if (shown == 0 && shownCompleted > 0) {
+                RALLY.toolkit.showWarning('The selected owner has only Completed stories and/or tasks');
+            }
+            if ((shown + shownCompleted) == 0) {
+                RALLY.toolkit.showWarning('The selected owner does not own any Completed stories or tasks');
             }
         },
 
@@ -862,7 +922,7 @@ YAHOO.util.Event.addListener(window, 'load', initTaskboard);
         height: 0;
     }
 
-    .hidden, .accepted {
+    .hidden, .accepted, .completed {
         display: none;
         visibility: hidden;
         height: 0;
@@ -956,7 +1016,7 @@ YAHOO.util.Event.addListener(window, 'load', initTaskboard);
         right: -0.3em;
     }
 
-    .rally-task-accepted {
+    .rally-task-accepted, .rally-task-completed  {
         background-color: #ececec;
         border: 1px solid #cbcbcb;
     }
@@ -1025,17 +1085,23 @@ YAHOO.util.Event.addListener(window, 'load', initTaskboard);
                 </span>
         </div>
                 <span id="change_iteration">
-                    Change iteration:
+                    Iteration:
                     <select id="change_iteration_control" size="1"></select>
                 </span>
                 <span id="filter_user">
-                    Show work owned by:
+                    Owned by:
                     <select id="filter_user_control" size="1"></select>
                 </span>
                 <span id="hide_accepted">
-                    Hide accepted work:
+                    Hide accepted:
                     <input type="checkbox" id="hide_accepted_control"/>
                 </span>
+                <span id="hide_completed">
+                    Hide completed:
+                    <input type="checkbox" id="hide_completed_control"/>
+                </span>
+				<span style="float: right;" id="info"> 
+				</span>
     </div>
 
     <div id="taskboard"></div>
