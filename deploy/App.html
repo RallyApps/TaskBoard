@@ -72,8 +72,8 @@ function initTaskboard() {
 
             "tasks"             : "/tasks?fetch=taskindex,name,objectid,formattedid,owner,blocked,estimate,todo,actuals,state,workproduct&query=(Iteration = ${iteration})" + scoping + paging,
 
-            "stories"           : "/hierarchicalrequirement?fetch=rank,blocked,formattedid,name,objectid,owner,project,schedulestate,taskestimatetotal,taskremainingtotal,taskactualtotal,tasks&order=Rank&query=(Iteration = ${iteration})" + scoping + paging,
-            "defects"           : "/defect?fetch=rank,blocked,formattedid,name,objectid,owner,project,schedulestate,taskestimatetotal,taskremainingtotal,taskactualtotal&order=Rank&query=(Iteration = ${iteration})" + scoping + paging,
+            "stories"           : "/hierarchicalrequirement?fetch=rank,blocked,formattedid,name,objectid,owner,project,schedulestate,taskestimatetotal,taskremainingtotal,taskactualtotal,tasks,planEstimate&order=Rank&query=(Iteration = ${iteration})" + scoping + paging,
+            "defects"           : "/defect?fetch=rank,blocked,formattedid,name,objectid,owner,project,schedulestate,taskestimatetotal,taskremainingtotal,taskactualtotal,planEstimate&order=Rank&query=(Iteration = ${iteration})" + scoping + paging,
             "defectsuite"       : "/defectsuite?fetch=rank,blocked,formattedid,name,objectid,owner,project,schedulestate,taskestimatetotal,taskremainingtotal,taskactualtotal&order=Rank&query=(Iteration = ${iteration})" + scoping + paging,
             "testsets"          : "/testset?fetch=rank,blocked,formattedid,name,objectid,owner,project,schedulestate,taskestimatetotal,taskremainingtotal,taskactualtotal&query=(Iteration = ${iteration})" + scoping + paging
         };
@@ -173,8 +173,22 @@ function initTaskboard() {
             });
             html.push('<div class="state">' + state.display(false, value.ScheduleState == 'Accepted') + '</div>');
 
-            html.push('<div class="id">' + value.FormattedID + '</div>');
-            html.push('<div class="name">' + RALLY.toolkit.niceSubstring(value.Name, 100) + '</div>');
+			
+			var storyType;
+			switch(value.FormattedID.substring(0,2))
+			{
+				case "US":
+					storyType = "userstory";
+					break;
+				case "DE":
+					storyType = "defect";
+					break;
+			}
+			
+			html.push('<div style="float: left;" class="id"><a href="' + '__SERVER_URL__' + '/#/detail/' + storyType + '/' + value.ObjectID + '" target="_blank">' + value.FormattedID + '</a></div>');
+			html.push('<div style="float: right;"> Story Points: ' + value.PlanEstimate + '</div>');
+            html.push('<div class="clear"></div>');
+			html.push('<div style="display: block;" class="name">' + RALLY.toolkit.niceSubstring(value.Name, 100) + '</div>');
             html.push('<div class="' + ownerClass.join(' ') + '">' + owner + '</div>');
 
             html.push(renderTimeCell((schema.TaskEstimateTotal) ? schema.TaskEstimateTotal.DisplayName : 'Est', value.TaskEstimateTotal, timeClass.join(' ')));
@@ -258,7 +272,7 @@ function initTaskboard() {
             }
 
             html.push('<div style="' + contentStyle + '">');
-            html.push('<div class="id">' + item.FormattedID + '</div>');
+            html.push('<div class="id"><a href="' + '__SERVER_URL__' + '/#/detail/task/' + item.ObjectID + '" target="_blank">' + item.FormattedID + '</a></div>');
             html.push('<div class="name">' + RALLY.toolkit.niceSubstring(item.Name) + '</div>');
             html.push('<div class="' + ownerClass.join(' ') + '">' + owner + '</div>');
 
